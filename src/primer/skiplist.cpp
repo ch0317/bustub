@@ -20,6 +20,7 @@
 #include "common/macros.h"
 #include "fmt/chrono.h"
 #include "fmt/core.h"
+#include "libfort/src/fort_utils.h"
 
 namespace bustub {
 
@@ -72,34 +73,38 @@ SKIPLIST_TEMPLATE_ARGUMENTS void SkipList<K, Compare, MaxHeight, Seed>::Clear() 
  * @return true if the insertion is successful, false if the key already exists.
  */
 SKIPLIST_TEMPLATE_ARGUMENTS auto SkipList<K, Compare, MaxHeight, Seed>::Insert(const K &key) -> bool {
-  SkipNode update_node(MaxHeight, key);
+  std::vector<std::shared_ptr<SkipNode>> update(MaxHeight);
   std::shared_ptr<SkipNode> x = Header();
-  for(int i = height_; i >= 1; i--) {
-    while(x->Next(i) != nullptr && x->Next(i)->Key() < key) {
+  for(int i = height_ - 1; i >= 0; i--) {
+    while(x->Next(i) != nullptr && compare_(x->Next(i)->Key(), key)) {
       x = x->Next(i);
     }
-    update_node.SetNext(i, x);
+    update[i] = x;
   }
 
-  x = x->Next(1);
+  x = x->Next(0);
 
-  if(x->Key() != key) {
+  if(x == nullptr || !compare_(x->Key(), key) || !compare_(key,x->Key())) {
     size_t height = RandomHeight();
+    if(height > MaxHeight) {
+      height = MaxHeight;
+    }
+
     if (height > height_) {
-      for(size_t i = height_ + 1; i <= height; i++) {
-        update_node.SetNext(i, Header());
+      for(size_t i = height_; i < height; i++) {
+        update[i] = Header();
       }
       height_ = height;
     }
 
-    std::shared_ptr<SkipNode> sn = std::make_shared<SkipNode>(height, key);
-    x = sn;
+    x = std::make_shared<SkipNode>(height, key);
 
-    for(size_t i = 1; i <= height_; i++) {
-      x->SetNext(i, update_node.Next(i));
-      update_node.Next(i) = x;
+    for(size_t i = 0; i < height; i++) {
+      x->SetNext(i, update[i]->Next(i));
+      update[i]->SetNext(i, x);
     }
-
+    size_++;
+    //Print();
     return true;
 
   }
@@ -114,27 +119,28 @@ SKIPLIST_TEMPLATE_ARGUMENTS auto SkipList<K, Compare, MaxHeight, Seed>::Insert(c
  * @return bool true if the element got erased, false otherwise.
  */
 SKIPLIST_TEMPLATE_ARGUMENTS auto SkipList<K, Compare, MaxHeight, Seed>::Erase(const K &key) -> bool {
-  SkipNode update_node(MaxHeight, key);
+  std::vector<std::shared_ptr<SkipNode>> update(MaxHeight);
   std::shared_ptr<SkipNode> x = Header();
-  for(size_t i = height_; i >= 1; i--) {
-    while(x->Next(i) != nullptr && x->Next(i)->Key() < key) {
+  for(int i = height_ - 1; i >= 0; i--) {
+    while(x->Next(i) != nullptr && compare_(x->Next(i)->Key(), key)) {
       x = x->Next(i);
     }
-    update_node.SetNext(i,x);
+    update[i] = x;
   }
 
-  if(x->Key() == key) {
-    for(size_t i = 1; i <= height_; i++) {
-      if(update_node.Next(i)->Next(i) != x) {
+  x = x->Next(1);
+  if(!compare_(x->Key(),key) && !compare_(key, x->Key())) {
+    for(size_t i = 0; i < height_; i++) {
+      if(update[i]->Next(i) != x) {
         break;
       }
-      update_node.Next(i)->Next(i) = x->Next(i);
+      update[i]->Next(i) = x->Next(i);
     }
 
     while(height_ > 1 && Header()->Next(height_) == nullptr) {
       height_ = height_ - 1;
     }
-
+    Print();
     return true;
   }
 
@@ -212,7 +218,7 @@ SKIPLIST_TEMPLATE_ARGUMENTS auto SkipList<K, Compare, MaxHeight, Seed>::SkipNode
  */
 SKIPLIST_TEMPLATE_ARGUMENTS auto SkipList<K, Compare, MaxHeight, Seed>::SkipNode::Next(size_t level) const
     -> std::shared_ptr<SkipNode> {
-  return links_[level - 1];
+  return links_[level];
 }
 
 /**
@@ -222,7 +228,7 @@ SKIPLIST_TEMPLATE_ARGUMENTS auto SkipList<K, Compare, MaxHeight, Seed>::SkipNode
  */
 SKIPLIST_TEMPLATE_ARGUMENTS void SkipList<K, Compare, MaxHeight, Seed>::SkipNode::SetNext(
     size_t level, const std::shared_ptr<SkipNode> &node) {
-  links_[level - 1] = node;
+  links_[level] = node;
 }
 
 /** @brief Returns a reference to the key stored in the node. */
